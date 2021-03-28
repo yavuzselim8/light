@@ -5,18 +5,18 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-type handlerFunction func(lc *LightContext)
+type handlerFunction func(lc *Context)
 
 type Light struct {
 	middlewares []handlerFunction
 	routes      map[string]map[string]handlerFunction
 }
 
-type LightContext struct {
+type Context struct {
 	ctx *fasthttp.RequestCtx
 }
 
-func (lc *LightContext) SendJSON(jsonString string) {
+func (lc *Context) SendJSON(jsonString string) {
 	lc.ctx.SuccessString("application/json", jsonString)
 }
 
@@ -49,8 +49,8 @@ func (light *Light) Post(route string, handler handlerFunction) {
 	light.routes["POST"][route] = newHandler
 }
 
-func (light *Light) getMiddlewaredHandler(handler handlerFunction) func(lc *LightContext) {
-	return func(lc *LightContext) {
+func (light *Light) getMiddlewaredHandler(handler handlerFunction) func(lc *Context) {
+	return func(lc *Context) {
 		for _, middleware := range light.middlewares {
 			middleware(lc)
 		}
@@ -60,7 +60,7 @@ func (light *Light) getMiddlewaredHandler(handler handlerFunction) func(lc *Ligh
 
 func (light *Light) handler(ctx *fasthttp.RequestCtx) {
 	if handlerFunc, exist := light.routes[string(ctx.Method())][string(ctx.RequestURI())]; exist {
-		handlerFunc(&LightContext{ctx: ctx})
+		handlerFunc(&Context{ctx: ctx})
 	}
 }
 
