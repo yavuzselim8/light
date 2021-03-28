@@ -1,71 +1,55 @@
 package light
 
-import (
-	"github.com/valyala/fasthttp"
-)
+type handler func(ctx *Context)
 
-type handlerFunction func(lc *Context)
-
-type Light struct {
-	middlewares []handlerFunction
-	routes      map[string]map[string]handlerFunction
+type Router struct {
+	middlewaresBefore []handler
+	routes            map[string]map[string]handler
+	middlewaresAfter  []handler
 }
 
-type Context struct {
-	ctx *fasthttp.RequestCtx
-}
-
-func (lc *Context) SendJSON(jsonString string) {
-	lc.ctx.SuccessString("application/json", jsonString)
-}
-
-func New() *Light {
-	return &Light{
-		routes: map[string]map[string]handlerFunction{"GET": {}, "POST": {}},
+func NewRouter() *Router {
+	return &Router{
+		routes: map[string]map[string]handler{"GET": {}, "POST": {}, "PUT": {}, "DELETE": {}},
 	}
 }
 
-func (light *Light) RegisterRouter(baseRoute string, router *Light) {
-	for method, routes := range router.routes {
-		for route, handler := range routes {
-			light.routes[method][baseRoute+route] = light.getMiddlewaredHandler(handler)
+func (router *Router) UseBefore(middleware handler) {
+	router.middlewaresBefore = append(router.middlewaresBefore, middleware)
+}
+
+func (router *Router) UseAfter(middleware handler) {
+	router.middlewaresAfter = append(router.middlewaresAfter, middleware)
+}
+
+func (router *Router) Get(route string, handler handler) {
+	newHandler := router.getMiddlewaredHandler(handler)
+	router.routes["GET"][route] = newHandler
+}
+
+func (router *Router) Post(route string, handler handler) {
+	newHandler := router.getMiddlewaredHandler(handler)
+	router.routes["POST"][route] = newHandler
+}
+
+func (router *Router) Put(route string, handler handler) {
+	newHandler := router.getMiddlewaredHandler(handler)
+	router.routes["PUT"][route] = newHandler
+}
+
+func (router *Router) Delete(route string, handler handler) {
+	newHandler := router.getMiddlewaredHandler(handler)
+	router.routes["DELETE"][route] = newHandler
+}
+
+func (router *Router) getMiddlewaredHandler(handler handler) func(ctx *Context) {
+	return func(ctx *Context) {
+		for _, middleware := range router.middlewaresBefore {
+			middleware(ctx)
 		}
-	}
-	router.routes = nil
-}
-
-func (light *Light) Use(middleware handlerFunction) {
-	light.middlewares = append(light.middlewares, middleware)
-}
-
-func (light *Light) Get(route string, handler handlerFunction) {
-	newHandler := light.getMiddlewaredHandler(handler)
-	light.routes["GET"][route] = newHandler
-}
-
-func (light *Light) Post(route string, handler handlerFunction) {
-	newHandler := light.getMiddlewaredHandler(handler)
-	light.routes["POST"][route] = newHandler
-}
-
-func (light *Light) getMiddlewaredHandler(handler handlerFunction) func(lc *Context) {
-	return func(lc *Context) {
-		for _, middleware := range light.middlewares {
-			middleware(lc)
+		handler(ctx)
+		for _, middleware := range router.middlewaresAfter {
+			middleware(ctx)
 		}
-		handler(lc)
-	}
-}
-
-func (light *Light) globalHandler(ctx *fasthttp.RequestCtx) {
-	if handler, exist := light.routes[string(ctx.Method())][string(ctx.RequestURI())]; exist {
-		handler(&Context{ctx: ctx})
-	}
-}
-
-func (light *Light) ListenAndServe(address string) {
-	err := fasthttp.ListenAndServe(address, light.globalHandler)
-	if err != nil {
-		panic(err)
 	}
 }
