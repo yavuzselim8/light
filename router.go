@@ -1,7 +1,6 @@
 package light
 
 import (
-	"fmt"
 	"github.com/valyala/fasthttp"
 )
 
@@ -21,18 +20,18 @@ func (lc *Context) SendJSON(jsonString string) {
 }
 
 func New() *Light {
-	light := &Light{
+	return &Light{
 		routes: map[string]map[string]handlerFunction{"GET": {}, "POST": {}},
 	}
-	return light
 }
 
-func (light *Light) RegisterLight(baseRoute string, otherLight *Light) {
-	for method, routes := range otherLight.routes {
+func (light *Light) RegisterRouter(baseRoute string, router *Light) {
+	for method, routes := range router.routes {
 		for route, handler := range routes {
 			light.routes[method][baseRoute+route] = light.getMiddlewaredHandler(handler)
 		}
 	}
+	router.routes = nil
 }
 
 func (light *Light) Use(middleware handlerFunction) {
@@ -58,16 +57,15 @@ func (light *Light) getMiddlewaredHandler(handler handlerFunction) func(lc *Cont
 	}
 }
 
-func (light *Light) handler(ctx *fasthttp.RequestCtx) {
-	if handlerFunc, exist := light.routes[string(ctx.Method())][string(ctx.RequestURI())]; exist {
-		handlerFunc(&Context{ctx: ctx})
+func (light *Light) globalHandler(ctx *fasthttp.RequestCtx) {
+	if handler, exist := light.routes[string(ctx.Method())][string(ctx.RequestURI())]; exist {
+		handler(&Context{ctx: ctx})
 	}
 }
 
 func (light *Light) ListenAndServe(address string) {
-	err := fasthttp.ListenAndServe(address, light.handler)
+	err := fasthttp.ListenAndServe(address, light.globalHandler)
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 }
-
